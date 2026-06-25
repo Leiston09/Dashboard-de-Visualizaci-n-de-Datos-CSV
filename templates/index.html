@@ -3,146 +3,296 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizador Pro de CSV</title>
-    <!-- Chart.js para gráficas interactivas -->
+    <title> CSV Dashboard</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+        :root{
+            --sidebar-width:250px;
+        }
+
+        body{
+            background:#f8f9fa;
+        }
+
+        .sidebar{
+            width:var(--sidebar-width);
+            height:100vh;
+            background:#2c3e50;
+            color:white;
+            position:fixed;
+            overflow-y:auto;
+        }
+
+        .main-content{
+            margin-left:var(--sidebar-width);
+            padding:20px;
+        }
+
+        .card{
+            border:none;
+            box-shadow:0 0.125rem 0.25rem rgba(0,0,0,.075);
+        }
+
+        #drop-zone{
+            border:2px dashed #475569;
+            border-radius:10px;
+            padding:20px;
+            text-align:center;
+            cursor:pointer;
+            transition:.3s;
+        }
+
+        #drop-zone:hover{
+            background:rgba(255,255,255,.08);
+        }
+
+        #drop-zone.highlight{
+            border-color:#0d6efd;
+            background:rgba(13,110,253,.15);
+        }
+
+        #file-info{
+            font-size:12px;
+            margin-top:10px;
+            color:#8ecdfc;
+            word-break:break-word;
+        }
+    </style>
 </head>
 <body>
-    <div class="app-layout">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>📊 CSV Visualizer</h2>
-            </div>
-            
-            <!-- Upload section -->
-            <div class="sidebar-section">
-                <h3>Subir Archivo</h3>
-                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="upload-form" id="upload-form">
-                    <div class="drag-drop-area" id="drop-zone">
-                        <span class="drop-icon">☁️</span>
-                        <p>Arrastra tu CSV aquí o</p>
-                        <label for="file" class="btn-link">busca en tu equipo</label>
-                        <input type="file" name="file" id="file" accept=".csv" required hidden>
-                        <div id="file-info" class="file-info-text"></div>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-block">Subir y Analizar</button>
-                </form>
-                <small class="help-text">Máximo: 5MB (solo archivos .csv)</small>
-            </div>
 
-            <!-- List of files -->
-            <div class="sidebar-section">
-                <h3>Archivos Recientes</h3>
-                <ul class="file-list" id="file-list-ul">
-                    {% if csv_files %}
-                        {% for f in csv_files %}
-                            <li class="file-item {% if f == current_file %}active{% endif %}" data-filename="{{ f }}">
-                                <span class="file-icon">📄</span>
-                                <span class="file-text" title="{{ f }}">{{ f }}</span>
-                                <div class="file-actions">
-                                    <button onclick="selectFile('{{ f }}')" class="action-btn" title="Seleccionar">🖱️</button>
-                                </div>
-                            </li>
-                        {% endfor %}
-                    {% else %}
-                        <p class="empty-state">No hay archivos.</p>
-                    {% endif %}
-                </ul>
-            </div>
-        </aside>
+<!-- SIDEBAR -->
+<div class="sidebar p-3 d-flex flex-column">
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Flash messages -->
-            {% with messages = get_flashed_messages() %}
-                {% if messages %}
-                    <div class="alert-container" id="alert-container">
-                        {% for message in messages %}
-                            <div class="alert">
-                                <span>{{ message }}</span>
-                                <button class="close-alert" onclick="this.parentElement.remove()">&times;</button>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% endwith %}
+    <h4 class="text-white mb-4">📊 Dashboard CSV</h4>
 
-            <header class="content-header">
-                <div class="header-title">
-                    <h1 id="dashboard-title">Visualización de Datos</h1>
-                    <p class="subtitle" id="current-file-display">
-                        {% if current_file %}
-                            Archivo activo: <strong>{{ current_file }}</strong>
-                        {% else %}
-                            Selecciona un archivo CSV para generar gráficas.
-                        {% endif %}
-                    </p>
-                </div>
-            </header>
+   <!-- CARGA CSV -->
+    <div class="mt-4">
+        <div class="text-uppercase text-white fw-bold mb-2 small">
+            📁 Cargar Nuevo CSV
+        </div>
 
-            <div class="dashboard-body">
-                <!-- Control Panel for Charts -->
-                <section class="controls-card" id="controls-section" {% if not current_file %}style="display:none;"{% endif %}>
-                    <div class="controls-grid">
-                        <div class="control-group">
-                            <label for="chart-type">Tipo de Gráfica</label>
-                            <select id="chart-type" class="form-select">
-                                <option value="bar">Barras</option>
-                                <option value="line">Líneas</option>
-                                <option value="pie">Pastel</option>
-                                <option value="scatter">Dispersión</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label for="axis-x">Eje X (Categoría/Independiente)</label>
-                            <select id="axis-x" class="form-select">
-                                <option value="">Selecciona columna...</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label for="axis-y">Eje Y (Valor/Dependiente)</label>
-                            <select id="axis-y" class="form-select">
-                                <option value="">Selecciona columna...</option>
-                            </select>
-                        </div>
-                        <div class="control-group actions">
-                            <button id="update-chart" class="btn btn-primary">🔄 Actualizar Gráfica</button>
-                            <button id="export-png" class="btn btn-secondary">💾 Exportar PNG</button>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Chart Container -->
-                <section class="chart-section-card">
-                    <div id="chart-placeholder" class="chart-placeholder" {% if current_file %}style="display:none;"{% endif %}>
-                        <div class="placeholder-content">
-                            <span class="placeholder-icon">📈</span>
-                            <h3>Sin datos para mostrar</h3>
-                            <p>Sube un archivo CSV y selecciona los ejes para generar una visualización.</p>
-                        </div>
-                    </div>
-                    <div id="canvas-container" class="canvas-container" {% if not current_file %}style="display:none;"{% endif %}>
-                        <canvas id="mainChart"></canvas>
-                    </div>
-                </section>
-
-                <!-- Data Preview (Optional but helpful) -->
-                <section class="preview-section" id="preview-section" style="display:none;">
-                    <h3>Vista Previa de Datos</h3>
-                    <div class="table-container" id="preview-table-container">
-                        <!-- Table injected via JS -->
-                    </div>
-                </section>
-            </div>
-        </main>
+        <form id="upload-form" action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+            <label for="file" id="drop-zone">
+                <div class="upload-icon">☁️</div>
+                <p class="mb-1">Arrastra aquí tu CSV</p>
+                <small>o haz clic para seleccionar</small>
+            </label>
+            <input type="file" id="file" name="file" accept=".csv" class="visually-hidden" required>
+            <div id="file-info"></div>
+            <small class="d-block text-secondary mt-2">Tamaño máximo: 5 MB</small>
+        </form>
     </div>
 
-    <!-- Data storage for JS -->
-    <script>
-        window.currentFilename = "{{ current_file or '' }}";
-    </script>
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <!-- MENÚ INFERIOR -->
+    <nav class="nav flex-column mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <a class="nav-link text-white fw-bold mb-0">📂 Mis Archivos</a>
+            <button id="delete-all-btn" class="btn btn-danger btn-sm" title="Eliminar todos los archivos">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+        <div id="file-list" class="overflow-y-auto" style="max-height: 300px;">
+            <!-- La lista se poblará dinámicamente -->
+        </div>
+    </nav>
+
+    <!-- RESUMEN -->
+    <div class="mt-auto">
+        <div class="card mt-4 summary-card">
+            <div class="card-body">
+                <h6 class="card-title mb-3">📄 Resumen del archivo</h6>
+                <div class="small">
+                    <p class="mb-2"><strong>Archivo:</strong><br><span id="summary-name">{{ current_file or 'Sin archivo' }}</span></p>
+                    <p class="mb-2"><strong>Filas:</strong><br><span id="summary-rows">-</span></p>
+                    <p class="mb-2"><strong>Columnas:</strong><br><span id="summary-columns">-</span></p>
+                    <p class="mb-2"><strong>Tamaño:</strong><br><span id="summary-size">-</span></p>
+                    <p class="mb-2"><strong>Delimitador:</strong><br><span id="summary-delimiter">-</span></p>
+                    <p class="mb-0"><strong>Codificación:</strong><br><span id="summary-encoding">UTF-8</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CONTENIDO -->
+<main class="main-content">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="fw-bold mb-1">Dashboard</h1>
+            <p class="text-muted mb-0">Visualiza y analiza tus datos</p>
+        </div>
+        <div>
+            <button id="theme-toggle" class="btn btn-outline-secondary">🌙 Modo Oscuro</button>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-info alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- BARRA DE CONTROLES PROFESIONAL -->
+    <div class="card shadow-sm p-4 mb-4 border-0">
+        <!-- Fila 1: Selectores de configuración -->
+
+<div class="row g-3 mb-3">
+
+    <div class="col-md-4">
+        <label for="chart-type" class="form-label fw-bold">
+            Tipo de gráfica
+        </label>
+
+        <select
+            id="chart-type"
+            class="form-select"
+            aria-label="Tipo de gráfica">
+
+            <option value="bar">Barras</option>
+            <option value="line">Líneas</option>
+            <option value="pie">Torta</option>
+            <option value="area">Área</option>
+
+        </select>
+    </div>
+
+    <div class="col-md-4">
+        <label for="axis-x" class="form-label fw-bold">
+            Eje X (Categoría)
+        </label>
+
+        <select
+            id="axis-x"
+            class="form-select"
+            aria-label="Eje X">
+
+            <option value="">Selecciona...</option>
+
+        </select>
+    </div>
+
+    <div class="col-md-4">
+        <label for="axis-y" class="form-label fw-bold">
+            Eje Y (Valor)
+        </label>
+
+        <select
+            id="axis-y"
+            class="form-select"
+            aria-label="Eje Y">
+
+            <option value="">Selecciona...</option>
+
+        </select>
+    </div>
+
+</div>
+        <!-- Fila 2: Acciones -->
+        <div class="row g-3 justify-content-center">
+            <div class="col-auto">
+                <button id="update-chart" class="btn btn-primary btn-action fw-bold px-4">
+                    <i class="bi bi-arrow-clockwise me-2"></i> Actualizar gráfica
+                </button>
+            </div>
+            <div class="col-auto">
+                <button id="export-png" class="btn btn-outline-primary btn-action fw-bold px-4">
+                    <i class="bi bi-download me-2"></i> Exportar imagen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILA 3: GRÁFICO Y ESTADÍSTICAS -->
+    <div class="row g-3 mb-4">
+        <!-- GRÁFICO (Izquierda) -->
+        <div class="col-lg-8">
+            <div class="card p-3 h-100">
+                <div id="chart-placeholder" class="text-center p-5" {% if current_file %}style="display:none;"{% endif %}>
+                    <h4 class="text-muted">📈 Selecciona un archivo y ejes para visualizar</h4>
+                </div>
+                <div id="canvas-container" {% if not current_file %}style="display:none;"{% endif %} class="canvas-container">
+                    <canvas id="mainChart"></canvas>
+                </div>
+                
+                <!-- CONTROLES DE AGRUPACIÓN (se muestran solo cuando hay muchos datos) 
+                <div id="group-controls" class="d-flex justify-content-between align-items-center mb-2" style="display: none;">
+                    <span class="fw-bold small text-muted">📊 Agrupación Eje X</span>
+                    <div class="d-flex gap-1">
+                        <button id="group-minus-chart" class="btn btn-outline-secondary btn-sm" disabled>
+                            <i class="bi bi-dash-lg"></i>
+                        </button>
+                        <span id="group-display-chart" class="btn btn-outline-secondary btn-sm disabled" style="min-width: 60px;">
+                            1 en 5
+                        </span>
+                        <button id="group-plus-chart" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                        <button id="group-reset-chart" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                    </div>
+                </div>-->
+            </div>
+        </div>
+        
+        <!-- ESTADÍSTICAS (Derecha) -->
+        <div class="col-lg-4">
+            <div id="stats-container" class="h-100">
+                <!-- Se rellena dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- FILA 4: TABLA -->
+    <div class="card p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5><i class="bi bi-table"></i> Vista previa de datos</h5>
+            <button id="toggle-table-btn" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-eye"></i> Ver más
+            </button>
+        </div>
+        <div id="preview-table-container" class="table-responsive"></div>
+    </div>
+</main>
+
+<script>
+    // Asignar archivo de sesión si existe, de lo contrario vacío
+    window.currentFilename = "{{ current_file or '' }}";
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+
+<script>
+    // Limpiar UI al cargar solo si NO hay un archivo en la sesión
+    window.addEventListener("load", () => {
+        if (!window.currentFilename) {
+            document.getElementById('stats-container').innerHTML = '';
+            document.getElementById('preview-table-container').innerHTML = '';
+            document.getElementById('chart-placeholder').style.display = 'block';
+            document.getElementById('canvas-container').style.display = 'none';
+        }
+        
+        // El tema oscuro ahora lo maneja script.js
+        // No hacer nada más aquí
+    });
+</script>
 </body>
 </html>
